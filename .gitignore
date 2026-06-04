@@ -1,0 +1,12 @@
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+
+# 浏览器本地数据
+my_chrome_cache/
+
+# IDE 配置（如 .idea/、.vscode/）
+.idea/
+.vscode/
+*.swp
