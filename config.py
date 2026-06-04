@@ -30,5 +30,8 @@ PROBLEM_LIST_URL = "https://leetcode.cn/problemset/"
 
 #===标签题单===#
 #    数组
-# PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/union-find/"
+# PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/array/"
+#    字符串
+# PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/string/"
+
 
