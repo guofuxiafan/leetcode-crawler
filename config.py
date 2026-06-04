@@ -16,7 +16,7 @@ MAX_PARALLEL = 2
 
 # 目标网站
 #===普通题单===#
-# PROBLEM_LIST_URL = "https://leetcode.cn/problemset/"
+PROBLEM_LIST_URL = "https://leetcode.cn/problemset/"
 
 #===学习计划===#
 #    leetcode热题100
@@ -30,5 +30,5 @@ MAX_PARALLEL = 2
 
 #===标签题单===#
 #    数组
-PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/union-find/"
+# PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/union-find/"
 
