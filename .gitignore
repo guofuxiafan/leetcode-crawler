@@ -10,3 +10,6 @@ my_chrome_cache/
 .idea/
 .vscode/
 *.swp
+
+# 输出文件
+*.html

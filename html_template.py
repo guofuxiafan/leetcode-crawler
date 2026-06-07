@@ -48,12 +48,29 @@ HTML_TEMPLATE = """
             color: #909399;
         }
         .menu-list { list-style: none; }
+        .menu-group {
+            padding: 16px 20px 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-top: 1px solid #ebeef5;
+        }
+        .menu-group:first-child { border-top: none; }
+        .menu-diff {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #fff;
+            font-weight: 500;
+        }
+        .menu-count { font-size: 12px; color: #909399; }
         .menu-item a {
             display: block;
-            padding: 10px 20px;
-            color: #303133;
+            padding: 8px 20px 8px 28px;
+            color: #606266;
             text-decoration: none;
-            font-size: 14px;
+            font-size: 13px;
         }
         .menu-item a:hover {
             background: #f5f7fa;

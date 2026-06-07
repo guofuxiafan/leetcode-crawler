@@ -10,10 +10,22 @@ from html_template import HTML_TEMPLATE
 # HTML 生成
 # ==============================
 def gen_menu(items):
-    return "\n".join([
-        f'<li class="menu-item"><a href="#p{i["序号"]}">{i["序号"]}. {i["题目名称"]}</a></li>'
-        for i in items
-    ])
+    order = ["简单", "中等", "困难"]
+    groups = {k: [] for k in order}
+    for i in items:
+        diff = i["难度"] if i["难度"] in order else "简单"
+        groups[diff].append(i)
+
+    parts = []
+    for diff in order:
+        lst = groups[diff]
+        if not lst:
+            continue
+        cls = {"简单": "easy", "中等": "medium", "困难": "hard"}[diff]
+        parts.append(f'<li class="menu-group"><span class="menu-diff {cls}">{diff}</span><span class="menu-count">{len(lst)}题</span></li>')
+        for i in lst:
+            parts.append(f'<li class="menu-item"><a href="#p{i["序号"]}">{i["题目名称"]}</a></li>')
+    return "\n".join(parts)
 
 
 def gen_content(items):
@@ -22,7 +34,7 @@ def gen_content(items):
         cls = {"简单": "easy", "中等": "medium", "困难": "hard"}.get(i["难度"], "easy")
         parts.append(f'''
         <div class="content-box" id="p{i["序号"]}">
-            <div class="content-title"><span class="diff {cls}">{i["难度"]}</span>{i["序号"]}. {i["题目名称"]}</div>
+            <div class="content-title"><span class="diff {cls}">{i["难度"]}</span>{i["题目名称"]}</div>
             <div class="url">链接：{i["题目链接"]}</div>
             <div class="content-body">{i["题目描述"]}</div>
         </div>''')
@@ -32,26 +44,33 @@ def gen_content(items):
 # ==============================
 # 爬取单题
 # ==============================
-async def crawl_one_page(page, url, idx):
-    try:
-        print(f"[{idx}] 正在爬取: {url}")
-        await page.goto(url, timeout=60000)
-        await page.wait_for_selector(".text-title-large a", timeout=30000)
+async def crawl_one_page(page, url, idx, retries=2):
+    for attempt in range(retries + 1):
+        try:
+            print(f"[{idx}] 正在爬取{' (重试)' if attempt > 0 else ''}: {url}")
+            await page.goto(url, timeout=60000)
+            await page.wait_for_selector(".text-title-large a", timeout=30000)
 
-        title = await page.locator(".text-title-large a").inner_text()
-        diff = await page.locator("[class*='text-difficulty-']").inner_text()
-        content = await page.locator(".HTMLContent_html__0OZLp").first.inner_html()
+            raw_title = await page.locator(".text-title-large a").inner_text()
+            title = re.sub(r'^\d+\.\s*', '', raw_title.strip())
+            diff = await page.locator("[class*='text-difficulty-']").inner_text()
+            content = await page.locator(".HTMLContent_html__0OZLp").first.inner_html()
 
-        return {
-            "序号": idx,
-            "题目名称": title.strip(),
-            "难度": diff.strip(),
-            "题目链接": url,
-            "题目描述": content.strip()
-        }
-    except Exception as e:
-        print(f"[{idx}] 爬取失败: {str(e)[:60]}")
-        return None
+            return {
+                "序号": idx,
+                "题目名称": title,
+                "难度": diff.strip(),
+                "题目链接": url,
+                "题目描述": content.strip()
+            }
+        except Exception as e:
+            err_msg = str(e)[:60]
+            if attempt < retries:
+                print(f"[{idx}] 爬取失败，准备重试: {err_msg}")
+                await page.wait_for_timeout(2000)
+            else:
+                print(f"[{idx}] 爬取失败（已重试{retries}次）: {err_msg}")
+    return None
 
 
 # ==============================
@@ -65,13 +84,37 @@ async def get_problem_urls(page):
     # --------------------------
     if "problemset" in cn_url:
         print("普通题库模式")
+        # 等待表格或列表加载
         await page.wait_for_selector('a[href^="/problems/"]', timeout=15000)
-        elements = await page.locator("a[href^='/problems/']").all()
+
+        # 滚动到底部加载全部题目
+        last_count = 0
+        for _ in range(20):
+            elements = await page.locator("a[href^='/problems/']").all()
+            if len(elements) == last_count:
+                break
+            last_count = len(elements)
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(800)
+        print(f"页面中共找到 {last_count} 个 /problems/ 链接")
+
+        seen = set()
         urls = []
         for e in elements:
             href = await e.get_attribute("href")
-            if href and "?" not in href:
-                urls.append(f"https://leetcode.cn{href}/description/")
+            if not href or "?" in href:
+                continue
+            # 严格匹配 /problems/<slug>/ 格式，过滤 editorial/solution
+            m = re.match(r'^/problems/([^/]+)/?$', href)
+            if not m:
+                continue
+            slug = m.group(1)
+            if slug in seen:
+                continue
+            seen.add(slug)
+            urls.append(f"https://leetcode.cn/problems/{slug}/description/")
+
+        print(f"去重后有效题目链接: {len(urls)} 个")
         return urls[:CRAWL_LIMIT]
 
     # --------------------------
@@ -152,6 +195,7 @@ async def main():
         browser = await p.chromium.launch_persistent_context(
             user_data_dir=USER_DATA_DIR,
             headless=False,
+            executable_path=r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             args=["--disable-images"]
         )
 
