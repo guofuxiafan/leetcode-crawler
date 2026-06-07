@@ -1,9 +1,42 @@
 import asyncio
+import os
+import platform
 import re
 from playwright.async_api import async_playwright
 
 from config import *
 from html_template import HTML_TEMPLATE
+
+
+def find_chrome():
+    """优先使用配置的 CHROME_PATH，否则按操作系统自动探测。"""
+    if CHROME_PATH and os.path.exists(CHROME_PATH):
+        return CHROME_PATH
+
+    system = platform.system()
+    candidates = []
+    if system == "Windows":
+        candidates = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ]
+    elif system == "Darwin":  # macOS
+        candidates = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            os.path.expanduser("~/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+        ]
+    else:  # Linux / 其他
+        candidates = [
+            "/usr/bin/google-chrome",
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+        ]
+
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return None
 
 
 # ==============================
@@ -192,12 +225,19 @@ async def get_problem_urls(page):
 # ==============================
 async def main():
     async with async_playwright() as p:
-        browser = await p.chromium.launch_persistent_context(
+        chrome_path = find_chrome()
+        launch_opts = dict(
             user_data_dir=USER_DATA_DIR,
             headless=False,
-            executable_path=r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             args=["--disable-images"]
         )
+        if chrome_path:
+            launch_opts["executable_path"] = chrome_path
+            print(f"使用系统 Chrome: {chrome_path}")
+        else:
+            print("未检测到系统 Chrome，使用 Playwright 自带 Chromium")
+
+        browser = await p.chromium.launch_persistent_context(**launch_opts)
 
         page = await browser.new_page()
         print(f"配置文件URL: {PROBLEM_LIST_URL}")

@@ -33,4 +33,7 @@ PROBLEM_LIST_URL = "https://leetcode.cn/problemset/"
 #    字符串
 # PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/string/"
 
+# 系统 Chrome 路径（留空则自动检测；Windows/Mac/Linux 均可）
+# 例: CHROME_PATH = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+CHROME_PATH = ""
 
