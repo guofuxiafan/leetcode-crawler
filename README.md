@@ -1,137 +1,209 @@
-# LeetCode 题目爬虫使用指南
+# LeetCode 爬虫 —— 自动化数据采集与算法题库整理
 
-一个基于 Playwright 的 LeetCode 题目爬虫，支持普通题库、标签题单（problem-list）和学习计划（studyplan）三种模式，可自动过滤会员题目，将题目描述（含图片）、难度、链接等信息生成为美观的 HTML 文档。
+基于 **Playwright + asyncio** 的 LeetCode 中文站爬虫，支持**普通题库、标签题单、学习计划**三种模式。一键将题目描述、难度、链接抓取到本地，生成带侧边栏目录、按难度分组的**单文件 HTML** 文档。
 
-## ✨ 功能特性
+---
 
-- 支持三种爬取模式：`/problemset/`、`/problem-list/`、`/studyplan/`
-- **浏览器本地缓存** – 保留登录状态，避免重复登录，提高爬取效率，浏览器二次启动加速
-- **并发爬取** – 通过 asyncio 控制并发数，快速下载多道题目
-- 保留题目描述中的图片（`<img>` 标签完整保存）
-- 输出单文件 HTML，支持侧边栏目录和图片自适应
+## ✨ 效果预览
 
-## 🛠️ 环境要求
+生成的 HTML 文档结构如下：
 
-- Python 3.8+
-- 操作系统：Windows / macOS / Linux
+- **左侧目录栏**：按「简单 / 中等 / 困难」分组，带颜色标签，点击即可跳转
+- **右侧内容区**：每道题独立卡片，包含题目标题、难度标识、原题链接、完整题目描述（保留图片与公式）
+- **单文件输出**：零依赖，双击即用浏览器打开，无需数据库或服务器
 
-## 📦 安装与配置
+---
 
-### 1. 克隆或下载本项目
+## 🚀 功能特性
 
-将 `main.py`、`config.py`、`html_template.py` 三个文件放在同一目录下。
+| 特性 | 说明 |
+|------|------|
+| 🌐 **三模式支持** | 普通题库 `problemset`、标签题单 `problem-list`、学习计划 `studyplan` |
+| 🖥️ **浏览器持久化** | 缓存 Cookie 与登录态，二次启动加速，降低反爬风险 |
+| ⚡ **异步并发** | `asyncio` + `Semaphore` 控制并发，20 题约 30~60 秒完成 |
+| 🔍 **懒加载处理** | 自动滚动到底部，触发 LeetCode 懒加载，抓取完整题目列表 |
+| 🌍 **学习计划兼容** | 自动跳转国际站提取 slug，解决中文站动态渲染无静态链接问题 |
+| 🖼️ **富文本保留** | 完整保留题目描述中的图片、数学公式、代码块 |
+| 🔧 **跨平台 Chrome 探测** | Windows / macOS / Linux 自动探测系统 Chrome 路径 |
+| 🛡️ **失败重试** | 单题超时或异常时自动重试，避免整体中断 |
+
+---
+
+## 🛠️ 技术栈
+
+- **浏览器自动化**：Playwright (async API)
+- **并发控制**：Python `asyncio` + `Semaphore`
+- **数据提取**：CSS Selector + 正则表达式
+- **输出渲染**：内嵌 CSS 的 HTML 字符串模板
+
+---
+
+## 📦 快速开始
+
+### 1. 克隆项目
+
+```bash
+git clone https://github.com/guofuxiafan/leetcode-crawler.git
+cd leetcode-crawler
+```
 
 ### 2. 安装依赖
 
 ```bash
 pip install playwright asyncio
-playwright install chromium   # 安装 Chromium 浏览器内核
+playwright install chromium
 ```
 
-### 3. 修改配置文件 `config.py`
+> `playwright install chromium` 用于安装 Playwright 自带的 Chromium 内核。如果系统已安装 Chrome，项目会优先使用系统 Chrome。
 
-- `USER_DATA_DIR` – 浏览器用户数据目录（用于缓存登录状态）
-- `HTML_OUTPUT_FILE` – 输出 HTML 文件名（可以自行更改输出）
-- `CRAWL_LIMIT` – 一次爬取多少道题目
-- `MAX_PARALLEL` – 并发数（建议 2~5，过高可能被限制）
-- `PROBLEM_LIST_URL` – 目标 URL（根据注释切换不同模式）
+### 3. 修改配置
 
-### 4. 首次运行
+编辑 `config.py`，修改以下关键项：
 
-首次运行可能会比较慢，也可能无法正常爬取，这都是正常现象，只需等待生成好浏览器缓存之后再运行即可正常爬取
+```python
+# 目标 URL（三种模式任选其一，取消注释即可）
+PROBLEM_LIST_URL = "https://leetcode.cn/problemset/"            # 普通题库
+# PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/array/"  # 标签题单：数组
+# PROBLEM_LIST_URL = "https://leetcode.cn/studyplan/top-100-liked/"  # 学习计划：热题 100
 
-## 🚀 使用方法
+# 爬取数量限制
+CRAWL_LIMIT = 20
+
+# 并发数（建议 2~5，过高可能被限制）
+MAX_PARALLEL = 3
+```
+
+### 4. 运行
 
 ```bash
 python main.py
 ```
 
-程序将自动打开浏览器窗口（非无头模式），爬取完成后生成 HTML 文件并退出。
+程序会自动打开 Chrome 窗口（非无头模式），抓取完成后生成 `OutputFile.html`。
 
-## ⚙️ 配置详解
+---
 
-| 配置项             | 说明                                  | 示例                |
-| ------------------ | ------------------------------------- | ------------------- |
-| `USER_DATA_DIR`    | 本地缓存目录，存放 Cookies 和登录状态 | `"my_chrome_cache"` |
-| `HTML_OUTPUT_FILE` | 输出文件路径                          | `"OutputFile.html"` |
-| `CRAWL_LIMIT`      | 最多爬取题数（不包含会员题）          | `5`                 |
-| `MAX_PARALLEL`     | 同时爬取的页面数量                    | `2`                 |
-| `PROBLEM_LIST_URL` | 目标页面 URL                          | 见下方三种模式      |
+## 📋 三种爬取模式详解
 
-### 三种模式切换
+### 模式一：普通题库
 
-1. **普通题库**  
-   `PROBLEM_LIST_URL = "https://leetcode.cn/problemset/"`
+```python
+PROBLEM_LIST_URL = "https://leetcode.cn/problemset/"
+```
 
-2. **标签题单**（例如数组、字符串）  
-   `PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/array/"`
+- 页面使用**懒加载**，程序会自动循环滚动到底部，直到全部题目加载完成
+- 通过正则 `^/problems/([^/]+)/?$` 严格过滤题解、编辑页等杂质链接
+- 使用 `set` 去重，生成完整 URL 列表
 
-3. **学习计划**（例如热题 100、面试 150）  
-   `PROBLEM_LIST_URL = "https://leetcode.cn/studyplan/top-100-liked/"`
+### 模式二：标签题单
 
-> 注意：学习计划模式会自动跳转到国际站 `leetcode.com` 抓取题目 slug，再回到中文站获取详情，因此网络需要能访问 `leetcode.com`。另外国际站某些学习计划模式的题单网站可能与中文站有所不同造成无法爬取的情况，本项目为了轻量化没有做适配，敬请谅解。
+```python
+PROBLEM_LIST_URL = "https://leetcode.cn/problem-list/array/"
+```
 
-## 💡 亮点解析
+- 按算法专题分类（数组、字符串、动态规划等）
+- 无懒加载，所有链接一次性获取
+- 适合针对薄弱知识点集中训练
 
-### 1. 浏览器本地缓存
+### 模式三：学习计划
 
-**原理**：  
-Playwright 的 `launch_persistent_context` 方法会创建一个持久的浏览器上下文，将用户数据（Cookies、LocalStorage、IndexedDB 等）保存到本地目录（`USER_DATA_DIR`）。  
-首次运行后，手动登录 LeetCode 产生的登录凭证会被保存下来；之后再次运行，浏览器会直接加载这些缓存数据，**无需重新登录**。  
-这不仅节省了每次启动时手动登录的麻烦，也绕过了部分反爬机制（因为你的请求看起来像一个真实登录用户）。当然，多数情况下我们也没有必要登录。另一方面，浏览器本地缓存可以加快二次启动的速度，不用每运行一次代码就重新加载浏览器底层资源一次，大大提升爬取效率
+```python
+PROBLEM_LIST_URL = "https://leetcode.cn/studyplan/top-100-liked/"
+```
 
-**优势**：  
+- **核心难点**：中文站学习计划页面采用 JavaScript 动态渲染，HTML 源码中**不存在**题目静态链接
+- **解决方案**：自动跳转至国际站 `leetcode.com`，在渲染后的 DOM 中提取 slug，再拼接回中文站 URL
+- 保留学习计划参数（`envType=study-plan-v2`），确保生成的链接在 LeetCode 中仍能显示所属计划
 
-- 降低被风控的概率  
-- 提速：省去登录等待时间
-- 加速二次启动
+---
 
-### 2. 并发爬取
+## 📁 项目结构
 
-**原理**：  
-使用 Python 的 `asyncio` 协程 + `Semaphore` 信号量控制并发度。  
-- 主函数为每个 URL 创建一个异步任务（`asyncio.create_task`）  
-- 每个任务内部使用信号量 `sem.acquire()` 限制同时运行的协程数量不超过 `MAX_PARALLEL`  
-- 所有任务并发执行，比串行爬取快数倍  
+```
+leetcode-crawler/
+├── main.py              # 主程序：三模式 URL 提取、异步并发爬取、HTML 生成
+├── config.py            # 全局配置：URL、并发数、输出文件名、Chrome 路径
+├── html_template.py     # HTML 模板（内嵌 CSS）：单文件输出、侧边栏目录、卡片式布局
+├── my_chrome_cache/     # 浏览器持久化缓存目录（首次运行后自动生成）
+├── OutputFile.html      # 生成的题目文档（示例）
+└── README.md            # 本文档
+```
 
-**为什么不是多线程**？  
-Playwright 的异步 API 本身基于 asyncio，使用协程可以复用同一个浏览器进程（不同页面），资源开销更小，且不受 Python GIL 限制。
+---
 
-**并发度建议**：  
-设置为 2~5 较为合适，过高的并发会导致页面加载资源冲突或被 LeetCode 服务器限制。
+## 💡 核心原理与技术亮点
+
+### 1. 为什么用 Playwright 而非 requests？
+
+LeetCode 题库页采用**前端渲染**（懒加载 + JS 动态插入内容），`requests` 只能获取原始 HTML 源码，无法拿到渲染后的题目链接。Playwright 操控真实浏览器，等待 JS 执行完毕后再提取 DOM，才能获取完整数据。
+
+### 2. 持久化浏览器上下文
+
+```python
+browser = await p.chromium.launch_persistent_context(
+    user_data_dir="my_chrome_cache"
+)
+```
+
+- 将 Cookie、LocalStorage 等数据持久化到本地目录
+- 首次手动登录后，后续运行自动复用登录态
+- 浏览器缓存加速二次启动
+
+### 3. 异步并发控制
+
+```python
+sem = asyncio.Semaphore(MAX_PARALLEL)
+
+async def job(idx, url):
+    async with sem:
+        page = await browser.new_page()
+        result = await crawl_one_page(page, url, idx)
+        await page.close()
+        return result
+```
+
+- `Semaphore(3)` 作为并发阀门，限制同时打开的标签页数量
+- 每道题独立页面，隔离性强，单题失败不影响其他任务
+- `asyncio.gather()` 汇总所有任务结果
+
+### 4. 跨平台 Chrome 自动探测
+
+```python
+def find_chrome():
+    # Windows / macOS / Linux 常见安装路径自动探测
+    # 优先使用 config.py 中手动配置的路径
+```
+
+无需手动指定 Chrome 路径，项目自动适配不同操作系统。
+
+---
+
+## ⚙️ 配置项说明
+
+| 配置项 | 类型 | 说明 |
+|--------|------|------|
+| `USER_DATA_DIR` | `str` | 浏览器缓存目录，存放 Cookies 与登录状态 |
+| `HTML_OUTPUT_FILE` | `str` | 输出 HTML 文件名 |
+| `CRAWL_LIMIT` | `int` | 最多爬取题目数（防止全量抓取） |
+| `MAX_PARALLEL` | `int` | 并发页面数，建议 2~5 |
+| `PROBLEM_LIST_URL` | `str` | 目标页面 URL，三种模式任选 |
+| `CHROME_PATH` | `str` | 手动指定 Chrome 路径，留空则自动探测 |
+
+---
 
 ## ⚠️ 注意事项
 
-- 学习计划模式依赖国际站 `leetcode.com` 的页面结构，若 LeetCode 改版可能导致失效，届时需调整选择器。
-- 会员题目无法进行爬取（如果没有登录会员账号）可能会造成爬取数量不符的情况，需相应修改 `crawl_one_page` 中的逻辑。
-- 输出的 HTML 文件中，图片链接为 LeetCode 官方 CDN 地址，需要联网才能正常显示。如需离线使用，请自行下载图片并替换路径。
-- 请合理设置并发数，不要过高以免对 LeetCode 服务器造成压力。
+1. **学习计划依赖国际站**：`studyplan` 模式需要网络可访问 `leetcode.com`，且依赖国际站当前页面结构。若 LeetCode 改版，可能需要更新 CSS 选择器。
+2. **会员题目过滤**：未登录会员账号时，会员题目页面结构异常，会被自动跳过（表现为爬取数量少于配置值）。
+3. **图片依赖网络**：输出 HTML 中的图片使用 LeetCode 官方 CDN 地址，离线环境下图片无法显示。
+4. **合理控制并发**：请勿设置过高并发，避免对 LeetCode 服务器造成压力。
+5. **首次运行**：首次启动可能较慢，需等待浏览器缓存目录生成，属正常现象。
 
-## 📁 文件结构
+---
 
-```
-.
-├── main.py          # 主程序
-├── config.py        # 配置文件
-├── html_template.py # HTML 模板（内嵌 CSS）
-└── my_chrome_cache/ # 浏览器缓存目录（第一次运行后自动生成）
-```
+## 📄 License
 
-## 🐛 常见问题
-
-**Q: 获取题目中包含会员题目造成卡住怎么办？**  
-A: 如果没有进行登录或者登录了但不是会员账号，在爬取题目时爬取到了会员题目界面可能会卡在不动，你只需要手动关闭会员题目标签页即可。
-
-**Q: 图片不显示？**  
-A: 本项目图片资源使用的是\<img>标签，资源来自leetcode官方图片资源，需要联网才能正常显示。
-
-**Q: 在学习计划模式下爬取失败怎么办？**
-
-A: 由于该模式下会用到leetcode国际站，最大的可能是页面没有加载出来，跳转到了错误的页面（比如首页），只需多次尝试直到成功即可。另外一种可能是国际站与中文站学习计划题单的后缀网址不同造成的。
-
-## 📄 许可证
-
-本项目仅供个人学习研究使用，请勿用于商业或大规模爬取，遵守 LeetCode 网站服务条款。
+本项目仅供个人学习研究使用，请勿用于商业或大规模爬取。请遵守 LeetCode 网站服务条款与 `robots.txt` 协议。
 
 ---
 
